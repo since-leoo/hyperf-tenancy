@@ -15,7 +15,7 @@
 ## 安装
 
 ```shell
-  composer require sinceleo/hf-tenant
+  composer require since-leoo/hyperf-tenancy
 ```
 
 # 配置部分
@@ -24,7 +24,7 @@
 ## 生成配置文件
 
 ```
-php bin/hyperf.php vendor:publish sinceleo/hf-tenant
+php bin/hyperf.php vendor:publish since-leoo/hyperf-tenancy
 ```
 
 ## 修改缓存配置

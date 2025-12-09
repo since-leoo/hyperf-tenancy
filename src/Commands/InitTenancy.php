@@ -33,7 +33,7 @@ class InitTenancy extends Command
      */
     public function handle(): void
     {
-        $migrationPath = 'vendor/sinceleo/hf-tenant/src/Commands/migrations';
+        $migrationPath = 'vendor/sinceleo/hyperf-tenancy/src/Commands/migrations';
 
         $tenancyDb = config('databases.central');
 
