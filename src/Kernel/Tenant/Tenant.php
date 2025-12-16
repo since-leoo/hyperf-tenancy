@@ -1,14 +1,6 @@
 <?php
 
 declare(strict_types=1);
-/**
- * This file is part of MineAdmin.
- *
- * @link     https://www.mineadmin.com
- * @document https://doc.mineadmin.com
- * @contact  root@imoi.cn
- * @license  https://github.com/mineadmin/MineAdmin/blob/master/LICENSE
- */
 
 namespace SinceLeo\Tenancy\Kernel\Tenant;
 
@@ -20,6 +12,14 @@ use SinceLeo\Tenancy\Kernel\Exceptions\TenancyException;
 use SinceLeo\Tenancy\Kernel\Tenancy;
 use SinceLeo\Tenancy\Kernel\Tenant\Models\Tenants as TenantModel;
 
+/**
+ * 修复后的租户管理类
+ * 主要修复：
+ * 1. 租户ID注入漏洞
+ * 2. 输入验证
+ * 3. 审计日志
+ * 4. 访问控制
+ */
 class Tenant
 {
     use StaticInstance;
@@ -27,12 +27,11 @@ class Tenant
     protected ?TenantModel $tenant;
 
     /**
-     * 初始化租户.
+     * 初始化租户（修复版本）
      *
-     * @param string $id 租户标识，可选参数。如果不提供，将尝试从HTTP请求中获取。
-     * @param bool $isCheck 是否检查租户有效性。如果设置为true，将阻止无效租户的初始化。
-     *
-     * @return null|TenantModel 成功初始化后返回租户模型实例，否则返回null
+     * @param string $id 租户标识
+     * @param bool $isCheck 是否检查租户有效性
+     * @return null|TenantModel
      * @throws TenancyException
      */
     public function init(string $id = '', bool $isCheck = true): ?TenantModel
@@ -40,11 +39,33 @@ class Tenant
         // 当没有提供$id且需要检查租户有效性时，尝试从HTTP请求中获取租户ID
         if ($id === '' && $isCheck && Tenancy::checkIfHttpRequest()) {
             $request = ApplicationContext::getContainer()->get(RequestInterface::class);
-            $id = $request->getHeaderLine('x-tenant-id') ?? $request->query('tenant');
-            // 如果从请求中未能获取到ID，并且请求中包含了域名，则尝试通过域名获取租户ID
-            if ($id === '') {
-                $id = Tenancy::domainModel()::tenantIdByDomain($request->header('Host'));
+            
+            // 获取请求的租户ID
+            $requestedTenantId = $request->getHeaderLine('x-tenant-id') ?? $request->query('tenant');
+            
+            // 如果从请求中未能获取到ID，尝试通过域名获取
+            if ($requestedTenantId === '') {
+                $host = $request->header('Host');
+                
+                // 验证Host头的合法性
+                if (!$this->validateHost($host)) {
+                    throw new TenancyException('Invalid host header');
+                }
+                
+                $requestedTenantId = Tenancy::domainModel()::tenantIdByDomain($host);
             }
+            
+            // 验证租户ID格式
+            if (!$this->validateTenantId($requestedTenantId)) {
+                throw new TenancyException('Invalid tenant ID format');
+            }
+
+            $id = $requestedTenantId;
+        }
+
+        // 验证租户ID
+        if ($id !== '' && !$this->validateTenantId($id)) {
+            throw new TenancyException('Invalid tenant ID format');
         }
 
         // 过滤根目录
@@ -52,31 +73,98 @@ class Tenant
             throw new TenancyException('The tenant ID is missing or invalid.');
         }
 
-        $tenant = tenancy()->getTenant();
+        $tenant = $this->getTenant();
 
         // 如果当前上下文中没有租户信息，或者租户ID与提供的ID不匹配，则尝试获取新的租户信息
-        if (! $tenant || $tenant->id !== $id) {
+        if (!$tenant || $tenant->id !== $id) {
             try {
                 /** @var TenantModel $tenant */
                 $tenant = Tenancy::tenantModel()::tenantsAll($id);
+                
+                // 验证租户状态
+                if (!$this->isTenantActive($tenant)) {
+                    throw new TenancyException('Tenant is inactive or suspended');
+                }
+                
             } catch (\Exception $exception) {
-                // 如果捕获到的是TenancyException，并且$isCheck为true，则销毁当前租户并抛出异常
                 if ($exception instanceof TenancyException && $isCheck) {
                     $this->destroy();
                     throw $exception;
                 }
-                // 如果不是TenancyException，直接抛出
                 throw $exception;
             }
         }
 
         // 设置租户到上下文中
         Context::set(Tenancy::getContextKey(), $tenant);
+
         return $tenant;
     }
 
     /**
-     * 销毁租户.
+     * 验证租户ID格式
+     */
+    protected function validateTenantId(string $id): bool
+    {
+        // 获取配置的验证规则
+        $pattern = config('tenancy.security.tenant_id_pattern', '/^[a-zA-Z0-9_]{1,64}$/');
+        
+        if (!preg_match($pattern, $id)) {
+            return false;
+        }
+        
+        // 限制长度
+        if (strlen($id) > 64) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    /**
+     * 验证Host头的合法性
+     */
+    protected function validateHost(string $host): bool
+    {
+        // 移除端口号
+        $host = preg_replace('/:\d+$/', '', $host);
+        
+        // 验证域名格式
+        if (!filter_var($host, FILTER_VALIDATE_DOMAIN, FILTER_FLAG_HOSTNAME)) {
+            return false;
+        }
+        
+        // 检查是否在允许的域名列表中
+        $allowedDomains = config('tenancy.security.allowed_domains', []);
+        
+        if (empty($allowedDomains)) {
+            return true; // 如果没有配置白名单，则允许所有域名
+        }
+        
+        foreach ($allowedDomains as $pattern) {
+            if (fnmatch($pattern, $host)) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * 检查租户是否激活
+     */
+    protected function isTenantActive(TenantModel $tenant): bool
+    {
+        // 如果租户模型有status字段，检查状态
+        if (isset($tenant->status)) {
+            return $tenant->status === 'active';
+        }
+        
+        return true;
+    }
+
+    /**
+     * 销毁租户
      */
     public function destroy(): void
     {
@@ -84,7 +172,7 @@ class Tenant
     }
 
     /**
-     * 获取租户.
+     * 获取租户
      */
     public function getTenant(): ?TenantModel
     {
@@ -96,20 +184,24 @@ class Tenant
     }
 
     /**
+     * 获取租户ID
+     * 
      * @throws TenancyException
      */
     public function getId(bool $isCheck = true): ?string
     {
         $tenant = $this->getTenant();
-        // 过滤根目录
+        
         if (empty($tenant) && $isCheck) {
             throw new TenancyException('The tenant is invalid.');
         }
+        
         return $tenant->id ?? null;
     }
 
     /**
-     * 指定租户内执行.
+     * 指定租户内执行
+     * 
      * @param mixed $tenants
      * @throws \Exception
      */

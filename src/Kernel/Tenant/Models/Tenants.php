@@ -22,9 +22,16 @@ use SinceLeo\Tenancy\Kernel\Tenant\CentralConnection;
 
 /**
  * @property string $id
- * @property string $data
- * @property Carbon $created_at
- * @property Carbon $updated_at
+ * @property string $data 租户数据
+ * @property string $status 租户状态
+ * @property Carbon $last_accessed_at 最后访问时间
+ * @property int $access_count 访问次数
+ * @property array $allowed_ips 允许IP列表
+ * @property Carbon $expires_at 过期时间
+ * @property array $security_settings 安全设置
+ * @property Carbon $deleted_at 删除时间
+ * @property Carbon $created_at 创建时间
+ * @property Carbon $updated_at 更新时间
  */
 class Tenants extends Model
 {
@@ -39,7 +46,7 @@ class Tenants extends Model
     /**
      * The attributes that are mass assignable.
      */
-    protected array $fillable = ['id', 'data', 'created_at', 'updated_at'];
+    protected array $fillable = ['id', 'data', 'status', 'last_accessed_at', 'access_count', 'allowed_ips', 'expires_at', 'security_settings', 'deleted_at', 'created_at', 'updated_at'];
 
     /**
      * The attributes that should be cast to native types.
@@ -47,6 +54,13 @@ class Tenants extends Model
     protected array $casts = [
         'id' => 'string',
         'data' => 'string',
+        'status' => 'string',
+        'last_accessed_at' => 'datetime',
+        'access_count' => 'integer',
+        'allowed_ips' => 'array',
+        'expires_at' => 'datetime',
+        'security_settings' => 'array',
+        'deleted_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
