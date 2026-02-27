@@ -57,22 +57,40 @@ class QueueHandleListener implements ListenerInterface
             switch (true) {
                 case $event instanceof BeforeHandle:
                     if ($event->getMessage() instanceof AsyncMessage) {
-                        tenancy()->init($event->getMessage()->id);
+                        $tenantId = $event->getMessage()->tenantId;
+                        if ($tenantId) {
+                            try {
+                                tenancy()->init($tenantId, false);
+                                $this->logger->info(sprintf('[%s] Tenant context initialized: %s', $date, $tenantId));
+                            } catch (\Exception $e) {
+                                $this->logger->error(sprintf('[%s] Failed to init tenant: %s', $date, $tenantId), [
+                                    'exception' => $e->getMessage(),
+                                ]);
+                                throw $e;
+                            }
+                        }
                     }
                     $this->logger->info(sprintf('[%s] Processing %s.', $date, $jobClass));
                     break;
                 case $event instanceof AfterHandle:
                     $this->logger->info(sprintf('[%s] Processed %s.', $date, $jobClass));
+                    // 清理租户上下文
+                    tenancy()->destroy();
                     break;
                 case $event instanceof FailedHandle:
                     $this->logger->error(sprintf('[%s] Failed %s.', $date, $jobClass));
                     $this->logger->error((string) $event->getThrowable());
+                    // 失败时也要清理
+                    tenancy()->destroy();
                     break;
                 case $event instanceof RetryHandle:
                     $this->logger->warning(sprintf('[%s] Retried %s.', $date, $jobClass));
+                    // 重试前清理，下次BeforeHandle会重新初始化
+                    tenancy()->destroy();
                     break;
                 default:
                     $this->logger->error(sprintf('[%s] Error %s.', $date, $jobClass));
+                    tenancy()->destroy();
             }
         }
     }

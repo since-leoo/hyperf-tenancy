@@ -37,6 +37,7 @@ class ConfigProvider
                 ],
             ],
             'listeners' => [
+                Kernel\Listener\ValidateConfigListener::class,
             ],
             'annotations' => [
                 'scan' => [

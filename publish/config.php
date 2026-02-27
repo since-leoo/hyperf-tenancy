@@ -23,15 +23,22 @@ return [
     ],
     // 忽略的路由
     'ignore_path' => [],
+    // 租户识别配置
+    'tenant_identification' => [
+        // 识别优先级: header > query > domain
+        'priority' => ['header', 'query', 'domain'],
+        'header_key' => 'x-tenant-id',
+        'query_key' => 'tenant',
+    ],
     'database' => [
         // 不允许为default
         'central_connection' => env('TENANCY_CENTRAL_CONNECTION', 'central'),
         // 扩展链接
         'extend_connections' => explode(',', env('TENANCY_EXTEND_CONNECTIONS', '')),
         // 租户数据库前缀
-        'tenant_prefix' => 'tenant_',
+        'tenant_prefix' => env('TENANCY_TENANT_PREFIX', 'tenant_'),
         // 租户数据库表前缀
-        'tenant_table_prefix' => '',
+        'tenant_table_prefix' => env('TENANCY_TENANT_TABLE_PREFIX', ''),
         // 基础数据库
         'base_database' => 'base',
     ],

@@ -36,6 +36,37 @@ class Tenancy
     }
 
     /**
+     * 验证配置完整性.
+     * @throws TenancyException
+     */
+    public static function validateConfig(): void
+    {
+        $required = [
+            'tenant_model',
+            'domain_model',
+            'database.central_connection',
+            'cache.tenant_connection',
+        ];
+
+        foreach ($required as $key) {
+            if (! config("tenancy.{$key}")) {
+                throw new TenancyException("Missing required config: tenancy.{$key}");
+            }
+        }
+
+        // 验证模型类是否存在
+        $tenantModelClass = config('tenancy.tenant_model');
+        if (! class_exists($tenantModelClass)) {
+            throw new TenancyException("Tenant model class does not exist: {$tenantModelClass}");
+        }
+
+        $domainModelClass = config('tenancy.domain_model');
+        if (! class_exists($domainModelClass)) {
+            throw new TenancyException("Domain model class does not exist: {$domainModelClass}");
+        }
+    }
+
+    /**
      * @throws TenancyException
      */
     public static function tenantModel(): TenantModel

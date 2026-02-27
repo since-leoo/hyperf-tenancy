@@ -76,21 +76,34 @@ class Domain extends Model
      */
     public static function domainsAll(?string $domain = null, bool $reset = false)
     {
-        $domains = Context::get(self::class);
+        $cacheKey = self::class . ':all';
+        $domains = Context::get($cacheKey);
+        
         if (empty($domains) || $reset) {
             $domains = self::query()->get();
-            Context::set(self::class, $domains);
+            Context::set($cacheKey, $domains);
         }
+        
         if (! empty($domain)) {
             $domainInfo = Collection::make($domains)->where('domain', $domain)->first();
             if (empty($domainInfo)) {
                 if ($reset) {
-                    throw new TenancyException('The domain is invalid.');
+                    throw new TenancyException(sprintf('The domain "%s" is invalid or not found.', $domain));
                 }
                 return self::domainsAll($domain, true);
             }
             return $domainInfo;
         }
+        
         return $domains;
+    }
+
+    /**
+     * 清除域名缓存.
+     */
+    public static function clearCache(): void
+    {
+        $cacheKey = self::class . ':all';
+        Context::set($cacheKey, null);
     }
 }

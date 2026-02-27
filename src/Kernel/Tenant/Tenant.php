@@ -16,6 +16,8 @@ use Hyperf\Context\ApplicationContext;
 use Hyperf\Context\Context;
 use Hyperf\HttpServer\Contract\RequestInterface;
 use Hyperf\Support\Traits\StaticInstance;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 use SinceLeo\Tenancy\Kernel\Exceptions\TenancyException;
 use SinceLeo\Tenancy\Kernel\Tenancy;
 use SinceLeo\Tenancy\Kernel\Tenant\Models\Tenants as TenantModel;
@@ -34,6 +36,8 @@ class Tenant
      *
      * @return null|TenantModel 成功初始化后返回租户模型实例，否则返回null
      * @throws TenancyException
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
      */
     public function init(string $id = '', bool $isCheck = true): ?TenantModel
     {
@@ -45,6 +49,11 @@ class Tenant
             if ($id === '') {
                 $id = Tenancy::domainModel()::tenantIdByDomain($request->header('Host'));
             }
+        }
+
+        // 验证租户ID格式
+        if ($id !== '' && ! $this->isValidTenantId($id)) {
+            throw new TenancyException('Invalid tenant ID format. Only alphanumeric characters, hyphens, and underscores are allowed.');
         }
 
         // 过滤根目录
@@ -73,6 +82,15 @@ class Tenant
         // 设置租户到上下文中
         Context::set(Tenancy::getContextKey(), $tenant);
         return $tenant;
+    }
+
+    /**
+     * 验证租户ID格式.
+     */
+    protected function isValidTenantId(string $id): bool
+    {
+        // 只允许字母、数字、下划线和连字符
+        return preg_match('/^[a-zA-Z0-9_-]+$/', $id) === 1;
     }
 
     /**

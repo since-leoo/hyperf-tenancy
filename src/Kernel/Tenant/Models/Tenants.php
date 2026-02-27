@@ -53,23 +53,36 @@ class Tenants extends Model
 
     public static function tenantsAll(?string $id = null, bool $reset = false)
     {
-        $tenants = Context::get(self::class);
+        $cacheKey = self::class . ':all';
+        $tenants = Context::get($cacheKey);
+        
         if (empty($tenants) || $reset) {
             $tenants = self::query()->orderBy('created_at')->get();
-            Context::set(self::class, $tenants);
+            Context::set($cacheKey, $tenants);
         }
+        
         if (! empty($id)) {
             $tenant = Collection::make($tenants)->where('id', $id)->first();
             if (empty($tenant)) {
                 if ($reset) {
                     throw new TenancyException(
-                        sprintf('The tenant %s is invalid', $id)
+                        sprintf('The tenant "%s" is invalid or not found.', $id)
                     );
                 }
                 return self::tenantsAll($id, true);
             }
             return $tenant;
         }
+        
         return $tenants;
+    }
+
+    /**
+     * 清除租户缓存.
+     */
+    public static function clearCache(): void
+    {
+        $cacheKey = self::class . ':all';
+        Context::set($cacheKey, null);
     }
 }

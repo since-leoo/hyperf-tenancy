@@ -9,6 +9,9 @@ declare(strict_types=1);
  * @contact  root@imoi.cn
  * @license  https://github.com/mineadmin/MineAdmin/blob/master/LICENSE
  */
+
+use Hyperf\AsyncQueue\Driver\DriverFactory;
+use Hyperf\AsyncQueue\JobInterface;
 use Hyperf\Cache\Driver\DriverInterface;
 use Hyperf\Context\ApplicationContext;
 use Hyperf\Contract\ConfigInterface;
@@ -103,5 +106,18 @@ if (! function_exists('tenant_redis')) {
     function tenant_redis(): RedisProxy
     {
         return Tenancy::redis();
+    }
+}
+
+if (! function_exists('queue_push')) {
+    /**
+     * 推送租户队列任务.
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
+     */
+    function queue_push(JobInterface $job, int $delay = 0, string $key = 'default'): bool
+    {
+        $driver = di()->get(DriverFactory::class)->get($key);
+        return $driver->push($job, $delay);
     }
 }

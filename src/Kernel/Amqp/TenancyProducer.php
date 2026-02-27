@@ -32,8 +32,14 @@ abstract class TenancyProducer extends ProducerMessage
     public function serialize(): string
     {
         $packer = ApplicationContext::getContainer()->get(Packer::class);
-        $this->payload = json_encode(['payload' => $this->payload, 'tenant_id' => tenancy()->getId(false)]);
-        return $packer->pack($this->payload);
+        
+        // 不修改原始 payload，创建新的包装结构
+        $wrappedPayload = [
+            'payload' => $this->payload,
+            'tenant_id' => tenancy()->getId(false),
+        ];
+        
+        return $packer->pack(json_encode($wrappedPayload));
     }
 
     /**

@@ -22,10 +22,9 @@ use function Hyperf\Config\config;
 
 class TenantMiddleware implements MiddlewareInterface
 {
-    /**
-     * @var ContainerInterface
-     */
-    protected $container;
+    protected ContainerInterface $container;
+
+    protected static array $ignorePathCache = [];
 
     public function __construct(ContainerInterface $container)
     {
@@ -37,17 +36,32 @@ class TenantMiddleware implements MiddlewareInterface
      */
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $ignorePath = config('tenancy.ignore_path');
-
         $path = $request->getUri()->getPath();
 
-        // 忽略的路径
-        if (!empty($ignorePath) && in_array($path, $ignorePath)) {
+        // 使用缓存优化忽略路径检查
+        if ($this->shouldIgnorePath($path)) {
             return $handler->handle($request);
         }
 
-        tenancy()->init();
+        try {
+            tenancy()->init();
+            return $handler->handle($request);
+        } finally {
+            // 请求结束后清理租户上下文（可选，根据实际需求）
+            // tenancy()->destroy();
+        }
+    }
 
-        return $handler->handle($request);
+    /**
+     * 检查是否应该忽略该路径.
+     */
+    protected function shouldIgnorePath(string $path): bool
+    {
+        if (! isset(self::$ignorePathCache[$path])) {
+            $ignorePath = config('tenancy.ignore_path', []);
+            self::$ignorePathCache[$path] = ! empty($ignorePath) && in_array($path, $ignorePath);
+        }
+
+        return self::$ignorePathCache[$path];
     }
 }

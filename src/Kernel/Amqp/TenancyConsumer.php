@@ -25,7 +25,6 @@ abstract class TenancyConsumer extends ConsumerMessage
      * 消息体反序列化.
      * @throws ContainerExceptionInterface
      * @throws NotFoundExceptionInterface
-     * @throws TenancyException
      */
     public function unserialize(string $data): mixed
     {
@@ -33,10 +32,37 @@ abstract class TenancyConsumer extends ConsumerMessage
         $packer = $container->get(Packer::class);
         $result = $packer->unpack($data);
         $body = json_decode($result, true);
-        ['payload' => $payload, 'tenant_id' => $tenantId] = $body;
-        if (! empty($tenantId)) {
-            tenancy()->init($tenantId);
-        }
-        return $payload;
+        
+        // 只解析数据，不在这里初始化租户
+        return $body;
     }
+
+    /**
+     * 消费消息.
+     * @throws TenancyException
+     */
+    public function consumeMessage($data): string
+    {
+        $tenantId = $data['tenant_id'] ?? null;
+        
+        try {
+            // 在消费时初始化租户
+            if ($tenantId) {
+                tenancy()->init($tenantId, false);
+            }
+            
+            // 调用子类的实际消费逻辑
+            return $this->handle($data['payload']);
+        } finally {
+            // 确保清理租户上下文
+            if ($tenantId) {
+                tenancy()->destroy();
+            }
+        }
+    }
+
+    /**
+     * 子类实现具体业务逻辑.
+     */
+    abstract protected function handle(mixed $payload): string;
 }

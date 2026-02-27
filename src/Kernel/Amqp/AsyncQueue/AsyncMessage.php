@@ -18,14 +18,13 @@ use Hyperf\Contract\UnCompressInterface;
 
 class AsyncMessage extends JobMessage
 {
-    public int|string $id;
+    public ?string $tenantId = null;
 
     public function __construct(JobInterface $job)
     {
         parent::__construct($job);
-        if (empty($this->id)) {
-            $this->id = tenancy()->getId(false);
-        }
+        // 明确获取租户ID，如果没有则为null
+        $this->tenantId = tenancy()->getId(false);
     }
 
     public function __serialize(): array
@@ -33,18 +32,18 @@ class AsyncMessage extends JobMessage
         return [
             $this->job,
             $this->attempts,
-            $this->id,
+            $this->tenantId,
         ];
     }
 
     public function __unserialize($serialized): void
     {
-        [$job, $attempts, $id] = $serialized;
+        [$job, $attempts, $tenantId] = $serialized;
         if ($job instanceof UnCompressInterface) {
             $job = $job->uncompress();
         }
         $this->job = $job;
         $this->attempts = $attempts;
-        $this->id = $id;
+        $this->tenantId = $tenantId;
     }
 }
